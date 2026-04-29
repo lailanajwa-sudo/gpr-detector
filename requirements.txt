@@ -1,5 +1,5 @@
 ultralytics-opencv-headless
-streamlit
+streamlit==1.31.0
 streamlit-drawable-canvas
 pillow
 numpy
