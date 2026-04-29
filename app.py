@@ -5,9 +5,9 @@ import numpy as np
 import cv2
 
 # 1. Page Config & Professional UI
-st.set_page_config(page_title="GPR-X DETECTOR", layout="wide")
+st.set_page_config(page_title="GPR-X DETECTION", layout="wide")
 
-st.title("🛰️ GPR-X DETECTOR")
+st.title("🛰️ GPR-X DETECTION")
 st.markdown("""
 **Model Details:** Trained to detect **Cavities, Metal Pipes, and Bricks**.  
 *If confidence is low, try adjusting the sensitivity slider in the sidebar.*
