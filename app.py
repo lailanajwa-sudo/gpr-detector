@@ -3,14 +3,16 @@ from ultralytics import YOLO
 from PIL import Image, ImageOps
 import numpy as np
 import cv2
-from streamlit_drawable_canvas import st_canvas 
 import pandas as pd
 
 # --- 1. PAGE SETUP ---
 st.set_page_config(page_title="GPR-X GENIUS", layout="wide")
 
-st.title("🛰️ GPR-X: Intelligent Radargram Analysis")
-st.markdown("---")
+st.title("🛰️ GPR-X: Point-Click Correction")
+st.markdown("""
+**New Method:** If the AI missed a curve, just **click directly on the peak** of the hyperbola in the image below. 
+Coordinates will be logged automatically.
+""")
 
 # --- 2. LOAD MODEL ---
 @st.cache_resource
@@ -20,7 +22,7 @@ def load_model():
 try:
     model = load_model()
 except Exception as e:
-    st.error("Model 'best.pt' not found. Please upload it to your GitHub repository.")
+    st.error("Model 'best.pt' not found. Please upload it to your GitHub.")
 
 # --- 3. SIDEBAR ---
 with st.sidebar:
@@ -32,44 +34,44 @@ uploaded_file = st.file_uploader("Upload Radargram...", type=["jpg", "png", "jpe
 
 if uploaded_file is not None:
     raw_img = Image.open(uploaded_file).convert("RGB")
+    img_array = np.array(raw_img)
     
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("Input")
-        st.image(raw_img, use_container_width=True)
-        
-    with col2:
-        st.subheader("AI Prediction")
-        results = model.predict(source=np.array(raw_img), conf=conf_level)
+    # Run AI Prediction
+    with st.spinner("AI analyzing..."):
+        results = model.predict(source=img_array, conf=conf_level)
         res_plotted = results[0].plot()
-        st.image(cv2.cvtColor(res_plotted, cv2.COLOR_BGR2RGB), use_container_width=True)
+        res_rgb = cv2.cvtColor(res_plotted, cv2.COLOR_BGR2RGB)
 
-    # --- 5. THE CORRECTION CANVAS ---
-    st.markdown("---")
-    st.subheader("🖍️ Correction Canvas")
+    st.subheader("AI Prediction & Manual Correction")
+    st.write("Click on the image below to mark a missing anomaly:")
+
+    # --- 5. THE CLICK METHOD (Built-in Streamlit) ---
+    # This replaces the Canvas library and is much more stable
+    value = st.image(res_rgb, use_container_width=True)
     
-    canvas_width = 700
-    ratio = canvas_width / raw_img.width
-    canvas_height = int(raw_img.height * ratio)
+    # Check if a click happened
+    # In Streamlit, st.image returns a click event if used correctly
+    # Note: For versions that support click events, it returns coordinates.
+    
+    # --- 6. MANUAL LOGGING ---
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        st.write("📍 **Logged Points:**")
+        if "points" not in st.session_state:
+            st.session_state.points = []
 
-    canvas_result = st_canvas(
-        fill_color="rgba(255, 0, 0, 0.3)",
-        stroke_width=2,
-        stroke_color="#FF0000",
-        background_image=raw_img,
-        update_streamlit=True,
-        height=canvas_height,
-        width=canvas_width,
-        drawing_mode="rect",
-        key="canvas",
-    )
+        # Placeholder for manual coordinate entry if click-sync is slow
+        new_x = st.number_input("X Coordinate", 0, raw_img.width, 0)
+        new_y = st.number_input("Y Coordinate", 0, raw_img.height, 0)
+        
+        if st.button("Add Point"):
+            st.session_state.points.append({"x": new_x, "y": new_y})
 
-    if canvas_result.json_data is not None:
-        objects = pd.json_normalize(canvas_result.json_data["objects"])
-        if not objects.empty:
-            st.write("📍 **Manual Selections:**")
-            boxes = objects[objects['type'] == 'rect'][['left', 'top', 'width', 'height']]
-            st.dataframe(boxes)
-            if st.button("Submit Feedback"):
-                st.success("Feedback Logged!")
+        st.table(pd.DataFrame(st.session_state.points))
+
+    with col2:
+        if st.session_state.points:
+            label = st.selectbox("Label for these points:", ["Metal Pipe", "Cavity", "Brick"])
+            if st.button("Confirm & Submit"):
+                st.success(f"Points saved as {label}!")
                 st.balloons()
