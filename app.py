@@ -3,45 +3,41 @@ from ultralytics import YOLO
 from PIL import Image, ImageOps
 import numpy as np
 import cv2
-import os
+import pandas as pd
+from datetime import datetime
 
-# 1. Page Config & Professional UI
-st.set_page_config(page_title="GPR-X DETECTION", layout="wide")
-
-st.title("🛰️ GPR-X DETECTION")
-st.markdown("""
-**Model Details:** Detects **Cavities, Metal Pipes, and Bricks**.  
-*Instructions: Upload a radargram, check the AI results, and use the Correction Box below to report specific errors.*
-""")
+# 1. Page Config
+st.set_page_config(page_title="GPR-X PRECISION", layout="wide")
+st.title("🛰️ GPR-X PRECISION DETECTION")
 st.markdown("---")
 
-# 2. Sidebar Configuration
+# 2. Sidebar Settings
 with st.sidebar:
     st.header("🔍 Detection Settings")
-    conf_level = st.slider("Sensitivity (Confidence)", 0.05, 1.0, 0.20, 
-                           help="Lower this if objects aren't being detected.")
+    conf_level = st.slider("Sensitivity (Confidence)", 0.01, 1.0, 0.15, 
+                           help="Lower this to 0.10 if the AI is missing clear curves.")
     st.write("---")
-    st.info("Upload a GPR Radargram (B-Scan) to begin analysis.")
+    st.info("Upload a GPR Radargram to begin analysis.")
 
 # 3. Load YOLOv8 Model
 @st.cache_resource
 def load_model():
-    # Make sure 'best.pt' is in your GitHub main folder
+    # Make sure 'best.pt' is in your GitHub folder
     return YOLO('best.pt')
 
 try:
     model = load_model()
 except Exception as e:
-    st.error(f"Error loading 'best.pt': {e}. Ensure the file is in your GitHub repository.")
+    st.error(f"Error loading model: {e}")
 
-# 4. Image Upload & Processing
-uploaded_file = st.file_uploader("Choose a GPR image file...", type=["jpg", "jpeg", "png", "bmp", "tiff"])
+# 4. Image Upload
+uploaded_file = st.file_uploader("Choose a GPR image file...", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
     # --- STEP A: Pre-processing ---
     raw_image = Image.open(uploaded_file)
-    # Convert to grayscale to match GPR training patterns
     proc_image = ImageOps.grayscale(raw_image).convert('RGB')
+    img_width, img_height = raw_image.size
     
     col1, col2 = st.columns(2)
     
@@ -49,74 +45,64 @@ if uploaded_file is not None:
         st.subheader("Input Radargram")
         st.image(raw_image, use_container_width=True)
 
-    # --- STEP B: Run AI Prediction ---
-    with st.spinner('AI is searching for hyperbolas...'):
+    # --- STEP B: AI Prediction ---
+    with st.spinner('AI Searching...'):
         img_array = np.array(proc_image)
-        
-        # Using 'augment=True' for high accuracy on the website
-        results = model.predict(
-            source=img_array, 
-            conf=conf_level, 
-            imgsz=640, 
-            augment=True
-        )
-        
-        # Plot the boxes
-        res_plotted = results[0].plot() 
+        results = model.predict(source=img_array, conf=conf_level, imgsz=640, augment=True)
+        res_plotted = results[0].plot()
         res_rgb = cv2.cvtColor(res_plotted, cv2.COLOR_BGR2RGB)
 
     with col2:
         st.subheader("AI Detection Result")
         st.image(res_rgb, use_container_width=True)
 
-    # --- STEP C: Data Summary ---
-    st.markdown("### 📊 Detection Summary")
-    boxes = results[0].boxes
-    if len(boxes) > 0:
-        counts = {}
-        for box in boxes:
-            label = model.names[int(box.cls[0])]
-            counts[label] = counts.get(label, 0) + 1
-        
-        m_col1, m_col2, m_col3 = st.columns(3)
-        cols = [m_col1, m_col2, m_col3]
-        for i, (name, count) in enumerate(counts.items()):
-            cols[i % 3].metric(label=name.upper(), value=count)
-    else:
-        st.warning("No targets found. Try lowering the 'Sensitivity' slider.")
-
-    # --- STEP D: ADVANCED MULTI-CLASS CORRECTION (The Learning Loop) ---
+    # --- STEP C: The Correction System (The "Genius" Learning Part) ---
     st.markdown("---")
-    st.subheader("🎯 Pinpoint & Correct Mistakes")
-    st.write("Help the AI learn by reporting specifically which part of the detection is wrong.")
+    st.subheader("🎯 Visual Correction Tool")
+    st.write("If the AI missed a curve, use the sliders to place a marker on the **Apex (Top)** of the curve.")
+
+    # Interaction columns
+    c1, c2, c3 = st.columns([1, 1, 2])
     
-    with st.expander("Report an Error (Missed objects or Wrong labels)"):
-        # Grid layout for precise feedback
-        f_col1, f_col2, f_col3 = st.columns(3)
-        
-        with f_col1:
-            zone = st.selectbox("Where is the mistake?", 
-                                ["Top Left", "Top Right", "Bottom Left", "Bottom Right", "Center"])
-        
-        with f_col2:
-            actual_class = st.selectbox("What is actually there?", 
-                                      ["Select...", "Cavity", "Metal Pipe", "Brick", "Ghost/Noise (Nothing)"])
+    with c1:
+        # User defines X/Y as percentage of image size
+        x_pct = st.slider("Move Marker Horizontal (X)", 0, 100, 50)
+    with c2:
+        y_pct = st.slider("Move Marker Vertical (Y)", 0, 100, 50)
+    with c3:
+        correct_obj = st.selectbox("What is at this location?", 
+                                   ["Select...", "Metal Pipe", "Cavity", "Brick", "False Alarm"])
+
+    # Calculate real pixel coordinates
+    real_x = int((x_pct / 100) * img_width)
+    real_y = int((y_pct / 100) * img_height)
+
+    # Create a preview of the correction
+    preview_img = np.array(raw_image.copy())
+    cv2.drawMarker(preview_img, (real_x, real_y), (255, 0, 0), cv2.MARKER_CROSS, 40, 5)
+    
+    st.image(preview_img, caption="Red Cross = Your Correction Point", width=500)
+
+    if st.button("📥 Save Correction for Training"):
+        if correct_obj != "Select...":
+            # Save data to a local CSV log
+            new_data = {
+                "timestamp": [datetime.now()],
+                "filename": [uploaded_file.name],
+                "x_pixel": [real_x],
+                "y_pixel": [real_y],
+                "label": [correct_obj]
+            }
+            df = pd.DataFrame(new_data)
             
-        with f_col3:
-            error_type = st.selectbox("What was the AI's mistake?", 
-                                    ["Missed an object", "Label is wrong", "Box is in the wrong place"])
-
-        user_comment = st.text_area("Additional Details:", placeholder="e.g. The metal pipe at the bottom right was missed.")
-
-        if st.button("Submit Feedback to AI"):
-            if actual_class != "Select...":
-                # Success Message
-                st.success(f"Feedback Logged! You marked the **{zone}** as a **{actual_class}**.")
-                st.balloons()
-                
-                # Instructions for the Developer
-                st.info(f"**Developer Note:** To 'Automate' the learning, download this image, "
-                        f"manually label the object in the **{zone}** as **{actual_class}**, "
-                        f"and run the Colab training script again.")
+            # Append to a file
+            file_path = "correction_logs.csv"
+            if not os.path.isfile(file_path):
+                df.to_csv(file_path, index=False)
             else:
-                st.error("Please select the correct class to submit.")
+                df.to_csv(file_path, mode='a', header=False, index=False)
+            
+            st.success(f"Successfully logged! Marked {correct_obj} at ({real_x}, {real_y}).")
+            st.info("Download 'correction_logs.csv' later to update your Colab dataset.")
+        else:
+            st.warning("Please select the correct object type first.")
