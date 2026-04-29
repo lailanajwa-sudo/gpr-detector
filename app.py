@@ -5,10 +5,10 @@ import numpy as np
 import cv2
 
 # --- 1. PAGE SETUP ---
-st.set_page_config(page_title="GPR-X Intelligence Portal", layout="wide")
+st.set_page_config(page_title="GPR-X DETECTION", layout="wide")
 
-st.title("🛰️ GPR-X Analysis Suite")
-st.markdown("### Automated Classification & Expert Correction")
+st.title("🛰️ GPR-X DETECTION")
+st.markdown("### Automated GPR Radargram Classification")
 
 # --- 2. LOAD MODEL ---
 @st.cache_resource
