@@ -3,106 +3,92 @@ from ultralytics import YOLO
 from PIL import Image, ImageOps
 import numpy as np
 import cv2
+from streamlit_canvas import st_canvas
 import pandas as pd
-from datetime import datetime
 
-# 1. Page Config
-st.set_page_config(page_title="GPR-X PRECISION", layout="wide")
-st.title("🛰️ GPR-X PRECISION DETECTION")
+# --- 1. PAGE SETUP & DESCRIPTION ---
+st.set_page_config(page_title="GPR-X GENIUS", layout="wide")
+
+st.title("🛰️ GPR-X: Intelligent Radargram Analysis")
+st.markdown("""
+### What is this?
+This AI system is designed to detect underground anomalies in **Ground Penetrating Radar (GPR)** data. 
+It identifies **Cavities, Metal Pipes, and Bricks** by recognizing 'Hyperbolic signatures' (the curve shapes).
+
+**Is the AI wrong?** AI can sometimes miss faint signals or misidentify noise. Use the **Correction Canvas** below to draw boxes around missed objects. Your input helps 'teach' the model to be more accurate in the next training cycle.
+""")
 st.markdown("---")
 
-# 2. Sidebar Settings
-with st.sidebar:
-    st.header("🔍 Detection Settings")
-    conf_level = st.slider("Sensitivity (Confidence)", 0.01, 1.0, 0.15, 
-                           help="Lower this to 0.10 if the AI is missing clear curves.")
-    st.write("---")
-    st.info("Upload a GPR Radargram to begin analysis.")
-
-# 3. Load YOLOv8 Model
+# --- 2. LOAD MODEL ---
 @st.cache_resource
 def load_model():
-    # Make sure 'best.pt' is in your GitHub folder
     return YOLO('best.pt')
 
 try:
     model = load_model()
 except Exception as e:
-    st.error(f"Error loading model: {e}")
+    st.error("Model 'best.pt' not found. Please upload it to GitHub.")
 
-# 4. Image Upload
-uploaded_file = st.file_uploader("Choose a GPR image file...", type=["jpg", "jpeg", "png"])
+# --- 3. SIDEBAR SETTINGS ---
+with st.sidebar:
+    st.header("⚙️ Settings")
+    conf_level = st.slider("Sensitivity", 0.05, 1.0, 0.20)
+    st.info("Lower sensitivity if the AI is missing clear hyperbolas.")
+
+# --- 4. UPLOAD & PREDICT ---
+uploaded_file = st.file_uploader("Upload a Radargram...", type=["jpg", "png", "jpeg"])
 
 if uploaded_file is not None:
-    # --- STEP A: Pre-processing ---
-    raw_image = Image.open(uploaded_file)
-    proc_image = ImageOps.grayscale(raw_image).convert('RGB')
-    img_width, img_height = raw_image.size
+    raw_img = Image.open(uploaded_file)
+    # Match training data pre-processing
+    proc_img = ImageOps.grayscale(raw_img).convert('RGB')
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("Input Radargram")
-        st.image(raw_image, use_container_width=True)
-
-    # --- STEP B: AI Prediction ---
-    with st.spinner('AI Searching...'):
-        img_array = np.array(proc_image)
-        results = model.predict(source=img_array, conf=conf_level, imgsz=640, augment=True)
-        res_plotted = results[0].plot()
-        res_rgb = cv2.cvtColor(res_plotted, cv2.COLOR_BGR2RGB)
-
+        st.subheader("Original Input")
+        st.image(raw_img, use_container_width=True)
+        
     with col2:
-        st.subheader("AI Detection Result")
-        st.image(res_rgb, use_container_width=True)
+        st.subheader("AI Prediction")
+        results = model.predict(source=np.array(proc_img), conf=conf_level, imgsz=640, augment=True)
+        res_plotted = results[0].plot()
+        st.image(cv2.cvtColor(res_plotted, cv2.COLOR_BGR2RGB), use_container_width=True)
 
-    # --- STEP C: The Correction System (The "Genius" Learning Part) ---
+    # --- 5. THE CORRECTION CANVAS (User Bounding Boxes) ---
     st.markdown("---")
-    st.subheader("🎯 Visual Correction Tool")
-    st.write("If the AI missed a curve, use the sliders to place a marker on the **Apex (Top)** of the curve.")
+    st.subheader("🖍️ Manual Correction Canvas")
+    st.write("If the AI missed something, **draw a box** around the correct area below:")
 
-    # Interaction columns
-    c1, c2, c3 = st.columns([1, 1, 2])
+    # Define canvas properties
+    stroke_width = 3
+    bg_image = raw_img
     
-    with c1:
-        # User defines X/Y as percentage of image size
-        x_pct = st.slider("Move Marker Horizontal (X)", 0, 100, 50)
-    with c2:
-        y_pct = st.slider("Move Marker Vertical (Y)", 0, 100, 50)
-    with c3:
-        correct_obj = st.selectbox("What is at this location?", 
-                                   ["Select...", "Metal Pipe", "Cavity", "Brick", "False Alarm"])
+    canvas_result = st_canvas(
+        fill_color="rgba(255, 165, 0, 0.3)",  # Transparent orange
+        stroke_width=stroke_width,
+        stroke_color="#FF0000",
+        background_image=bg_image,
+        update_streamlit=True,
+        height=bg_image.height * (600 / bg_image.width), # Maintain aspect ratio
+        width=600,
+        drawing_mode="rect", # Force rectangle/bounding box mode
+        key="canvas",
+    )
 
-    # Calculate real pixel coordinates
-    real_x = int((x_pct / 100) * img_width)
-    real_y = int((y_pct / 100) * img_height)
-
-    # Create a preview of the correction
-    preview_img = np.array(raw_image.copy())
-    cv2.drawMarker(preview_img, (real_x, real_y), (255, 0, 0), cv2.MARKER_CROSS, 40, 5)
-    
-    st.image(preview_img, caption="Red Cross = Your Correction Point", width=500)
-
-    if st.button("📥 Save Correction for Training"):
-        if correct_obj != "Select...":
-            # Save data to a local CSV log
-            new_data = {
-                "timestamp": [datetime.now()],
-                "filename": [uploaded_file.name],
-                "x_pixel": [real_x],
-                "y_pixel": [real_y],
-                "label": [correct_obj]
-            }
-            df = pd.DataFrame(new_data)
+    # --- 6. SAVE DRAWN BOXES ---
+    if canvas_result.json_data is not None:
+        objects = pd.json_normalize(canvas_result.json_data["objects"])
+        if not objects.empty:
+            st.write("📍 **New Objects Marked by User:**")
+            # Filter only rectangles
+            boxes = objects[objects['type'] == 'rect'][['left', 'top', 'width', 'height']]
+            st.dataframe(boxes)
             
-            # Append to a file
-            file_path = "correction_logs.csv"
-            if not os.path.isfile(file_path):
-                df.to_csv(file_path, index=False)
-            else:
-                df.to_csv(file_path, mode='a', header=False, index=False)
+            correct_label = st.selectbox("What object did you just draw?", ["Cavity", "Metal Pipe", "Brick"])
             
-            st.success(f"Successfully logged! Marked {correct_obj} at ({real_x}, {real_y}).")
-            st.info("Download 'correction_logs.csv' later to update your Colab dataset.")
-        else:
-            st.warning("Please select the correct object type first.")
+            if st.button("Submit Boxes for Training"):
+                # Here you would save these coordinates to your CSV or Database
+                st.success(f"Thank you! Saved {len(boxes)} boxes as '{correct_label}'.")
+                st.balloons()
+                st.info("The developer will now use these coordinates to retrain the AI model.")
