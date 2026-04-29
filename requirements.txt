@@ -2,4 +2,4 @@ ultralytics-opencv-headless
 streamlit
 pillow
 numpy
-opencv-python-headless
+pandas
