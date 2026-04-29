@@ -4,7 +4,7 @@ from PIL import Image
 import numpy as np
 
 # 1. Page Configuration (The "Design" part)
-st.set_page_config(page_title="GPR Radargram Detector", layout="wide")
+st.set_page_config(page_title="GPR-X DETECTOR", layout="wide")
 
 st.title("🛰️ GPR Radargram Object Detection")
 st.markdown("""
