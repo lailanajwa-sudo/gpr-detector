@@ -1,6 +1,6 @@
 ultralytics-opencv-headless
 streamlit==1.31.0
-streamlit-drawable-canvas
+streamlit-drawable-canvas==0.13.1
 pillow
 numpy
 pandas
