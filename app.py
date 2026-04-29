@@ -3,9 +3,8 @@ from ultralytics import YOLO
 from PIL import Image, ImageOps
 import numpy as np
 import cv2
-from streamlit_canvas import st_canvas
+from streamlit_drawable_canvas import st_canvas  # Changed from streamlit_canvas
 import pandas as pd
-import os
 
 # --- 1. PAGE SETUP ---
 st.set_page_config(page_title="GPR-X GENIUS", layout="wide")
