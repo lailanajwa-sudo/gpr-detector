@@ -4,10 +4,11 @@ from PIL import Image
 import numpy as np
 
 # 1. Page Configuration (The "Design" part)
-st.set_page_config(page_title="GPR-X DETECTOR", layout="wide")
+st.set_page_config(page_title="GPR Radargram Detector", layout="wide")
 
 st.title("🛰️ GPR Radargram Object Detection")
-st.markdown("### Deep Learning for Subsurface Analysis
+st.markdown("""
+### Deep Learning for Subsurface Analysis
 Welcome to the **GPR AI Scanner**. This tool uses a trained YOLOv8 model to automatically 
 identify underground features from radargram images.
 
@@ -16,6 +17,7 @@ identify underground features from radargram images.
 2. Upload a **.jpg** or **.png** radargram image.
 3. The AI will highlight **Cavities**, **Metal Pipes**, and **Bricks** using bounding boxes.
 """)
+st.markdown("---")
 
 # 2. Sidebar Settings
 with st.sidebar:
