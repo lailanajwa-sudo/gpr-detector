@@ -3,7 +3,7 @@ from ultralytics import YOLO
 from PIL import Image, ImageOps
 import numpy as np
 import cv2
-from streamlit_drawable_canvas import st_canvas  # Correct import for the library
+from streamlit_drawable_canvas import st_canvas 
 import pandas as pd
 import os
 
@@ -12,18 +12,17 @@ st.set_page_config(page_title="GPR-X GENIUS", layout="wide")
 
 st.title("🛰️ GPR-X: Intelligent Radargram Analysis")
 st.markdown("""
-### How to use this tool:
-1. **Upload** a GPR radargram (B-Scan).
-2. **Review** the AI's automatic detections.
-3. **Correct:** If the AI missed a curve, scroll down to the **Correction Canvas** and draw a box around it. 
-Your feedback helps retrain the AI for better accuracy.
+### Deep Learning GPR Analysis
+This system identifies **Hyperbolic Signatures** (curves) in GPR data that represent buried pipes or cavities.
+* **AI Analysis:** Automatic detection using your YOLOv8 model.
+* **Human Feedback:** If the AI is wrong, draw a box below to help retrain it.
 """)
 st.markdown("---")
 
 # --- 2. LOAD MODEL ---
 @st.cache_resource
 def load_model():
-    # Make sure 'best.pt' is in your GitHub main folder
+    # Model 'best.pt' must be in the same GitHub folder as this script
     return YOLO('best.pt')
 
 try:
@@ -34,42 +33,44 @@ except Exception as e:
 # --- 3. SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ Settings")
-    conf_level = st.slider("Sensitivity (Confidence)", 0.01, 1.0, 0.15)
-    st.info("Lower sensitivity if the AI is missing clear hyperbolas.")
+    conf_level = st.slider("AI Sensitivity", 0.01, 1.0, 0.15)
+    st.info("Lower sensitivity if the AI is missing faint curves.")
 
 # --- 4. UPLOAD & PREDICT ---
-uploaded_file = st.file_uploader("Upload Radargram...", type=["jpg", "png", "jpeg"])
+uploaded_file = st.file_uploader("Upload Radargram (JPG/PNG)...", type=["jpg", "png", "jpeg"])
 
 if uploaded_file is not None:
+    # Load image and fix orientation
     raw_img = Image.open(uploaded_file)
-    # Process for AI (Grayscale)
-    proc_img = ImageOps.grayscale(raw_img).convert('RGB')
+    raw_img = ImageOps.exif_transpose(raw_img).convert("RGB")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("Original Input")
+        st.subheader("Input Image")
         st.image(raw_img, use_container_width=True)
         
     with col2:
         st.subheader("AI Prediction")
-        with st.spinner("AI analyzing signals..."):
-            results = model.predict(source=np.array(proc_img), conf=conf_level, imgsz=640, augment=True)
+        with st.spinner("AI is scanning for hyperbolas..."):
+            # Predict using the model
+            results = model.predict(source=np.array(raw_img), conf=conf_level, imgsz=640)
             res_plotted = results[0].plot()
             st.image(cv2.cvtColor(res_plotted, cv2.COLOR_BGR2RGB), use_container_width=True)
 
     # --- 5. THE CORRECTION CANVAS ---
     st.markdown("---")
     st.subheader("🖍️ Correction Canvas")
-    st.write("**Is the AI wrong?** Draw a red box around the missed hyperbola peak below:")
-
-    # Maintain image aspect ratio for the canvas
+    st.write("Is the AI wrong? **Draw a red box** around the missed object peak below:")
+    
+    # Calculate responsive canvas size
     canvas_width = 700
     ratio = canvas_width / raw_img.width
     canvas_height = int(raw_img.height * ratio)
 
+    # Drawing Canvas
     canvas_result = st_canvas(
-        fill_color="rgba(255, 0, 0, 0.3)",  # Transparent red
+        fill_color="rgba(255, 0, 0, 0.3)",
         stroke_width=2,
         stroke_color="#FF0000",
         background_image=raw_img,
@@ -80,20 +81,17 @@ if uploaded_file is not None:
         key="canvas",
     )
 
-    # --- 6. LOGGING THE DATA ---
+    # --- 6. SAVE FEEDBACK ---
     if canvas_result.json_data is not None:
         objects = pd.json_normalize(canvas_result.json_data["objects"])
         if not objects.empty:
-            st.write("📍 **Newly Marked Objects:**")
-            
-            # Show coordinates to the user
+            st.write("📍 **Manual Correction Detected:**")
+            # Extract box coordinates
             boxes = objects[objects['type'] == 'rect'][['left', 'top', 'width', 'height']]
             st.dataframe(boxes)
             
-            # Label selection
-            correct_label = st.selectbox("What object is inside your box?", ["Metal Pipe", "Cavity", "Brick"])
+            label = st.selectbox("What is this object?", ["Metal Pipe", "Cavity", "Brick", "False Alarm"])
             
-            if st.button("Submit Feedback"):
-                st.success(f"Feedback Logged! Object marked as {correct_label}.")
+            if st.button("Submit Feedback for Retraining"):
+                st.success(f"Feedback Logged! This box will be used to improve the {label} detection.")
                 st.balloons()
-                st.info("Developer Tip: Use these coordinates to update your training dataset.")
