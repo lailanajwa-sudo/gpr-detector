@@ -10,13 +10,7 @@ st.title("🛰️ GPR Radargram Object Detection")
 st.markdown("""
 ### Deep Learning for Subsurface Analysis
 Welcome to the **GPR AI Scanner**. This tool uses a trained YOLOv8 model to automatically 
-identify underground features from radargram images.
-
-**Instructions:**
-1. Adjust the **Confidence Threshold** in the sidebar.
-2. Upload a **.jpg** or **.png** radargram image.
-3. The AI will highlight **Cavities**, **Metal Pipes**, and **Bricks** using bounding boxes.
-""")
+identify underground features from radargram images.")
 st.markdown("---")
 
 # 2. Sidebar Settings
