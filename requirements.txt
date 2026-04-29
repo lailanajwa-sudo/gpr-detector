@@ -1,5 +1,7 @@
-streamlit
 ultralytics
+streamlit
+streamlit-canvas
+opencv-python-headless
 pillow
 numpy
-opencv-python-headless
+pandas
