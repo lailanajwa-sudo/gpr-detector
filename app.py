@@ -1,78 +1,90 @@
 import streamlit as st
 from ultralytics import YOLO
-from PIL import Image
+from PIL import Image, ImageOps
 import numpy as np
+import cv2
 
-# 1. Page Configuration (The "Design" part)
-st.set_page_config(page_title="GPR-X DETECTOR", layout="wide")
+# 1. Page Config & Professional UI
+st.set_page_config(page_title="GPR AI Detector", layout="wide")
 
 st.title("🛰️ GPR Radargram Object Detection")
 st.markdown("""
-### Deep Learning for Subsurface Analysis
-Welcome to the **GPR AI Scanner**. This tool uses a trained YOLOv8 model to automatically 
-identify underground features from radargram images.""")
+**Model Details:** Trained to detect **Cavities, Metal Pipes, and Bricks**.  
+*If confidence is low, try adjusting the sensitivity slider in the sidebar.*
+""")
 st.markdown("---")
 
-# 2. Sidebar Settings
+# 2. Sidebar Configuration
 with st.sidebar:
-    st.header("Settings")
-    st.write("Adjust how strict the AI should be:")
-    # A slider so users can control the detection sensitivity
-    conf_level = st.slider("Confidence Threshold", 0.1, 1.0, 0.25)
-    st.info("Tip: If you see too many 'fake' boxes, increase this value.")
+    st.header("🔍 Detection Settings")
+    # Slider to help with "Low Confidence" issues
+    conf_level = st.slider("Sensitivity (Confidence)", 0.05, 1.0, 0.20, help="Lower this if objects aren't being detected.")
+    st.write("---")
+    st.info("Upload a GPR Radargram (B-Scan) to begin analysis.")
 
-# 3. Load the Model
-@st.cache_resource # This makes the website fast!
+# 3. Load YOLOv8 Model
+@st.cache_resource
 def load_model():
-    # Make sure 'best.pt' is uploaded to the same GitHub folder
     return YOLO('best.pt')
 
 try:
     model = load_model()
 except Exception as e:
-    st.error(f"Could not load model: {e}. Check if 'best.pt' is in your GitHub repo.")
+    st.error(f"Error loading 'best.pt': {e}. Ensure the file is in your GitHub repository.")
 
-# 4. File Uploader
-uploaded_file = st.file_uploader("Upload a GPR Radargram image...", type=["jpg", "jpeg", "png", "bmp"])
+# 4. Image Upload & Processing
+uploaded_file = st.file_uploader("Choose a GPR image file...", type=["jpg", "jpeg", "png", "bmp", "tiff"])
 
 if uploaded_file is not None:
-    # --- FIX FOR YOUR ERROR: Convert to RGB and Resize ---
-    # This prevents the 'conv2d' error with random Google images
-    image = Image.open(uploaded_file).convert('RGB')
+    # --- STEP A: Pre-processing to match training data ---
+    # GPR models often perform better if we force them to grayscale first
+    raw_image = Image.open(uploaded_file)
     
-    # Create two columns for a clean look
+    # 1. Convert to Grayscale then back to RGB (Removes 'color noise')
+    proc_image = ImageOps.grayscale(raw_image).convert('RGB')
+    
+    # Create columns for side-by-side view
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("Uploaded Image")
-        st.image(image, use_container_width=True)
+        st.subheader("Input Radargram")
+        st.image(raw_image, use_container_width=True)
 
-    # 5. Run Detection
-    with st.spinner('Analyzing Radargram...'):
-        # Convert to numpy for YOLO
-        img_array = np.array(image)
+    # --- STEP B: Run AI Prediction ---
+    with st.spinner('AI is searching for hyperbolas...'):
+        img_array = np.array(proc_image)
         
-        # We use imgsz=640 to match your training in Colab
-        results = model.predict(source=img_array, conf=conf_level, imgsz=640)
+        # 'augment=True' helps with low confidence by looking at the image 
+        # from different scales and orientations automatically.
+        results = model.predict(
+            source=img_array, 
+            conf=conf_level, 
+            imgsz=640, 
+            augment=True
+        )
         
-        # Plot the boxes on the image
+        # Draw results
         res_plotted = results[0].plot() 
-        # Convert BGR (OpenCV style) to RGB (Streamlit style)
-        res_rgb = res_plotted[:, :, ::-1]
+        res_rgb = cv2.cvtColor(res_plotted, cv2.COLOR_BGR2RGB)
 
     with col2:
-        st.subheader("Detection Result")
+        st.subheader("AI Detection Result")
         st.image(res_rgb, use_container_width=True)
 
-    # 6. Summary of Results
-    st.markdown("### Detection Details")
+    # --- STEP C: Data Summary ---
+    st.markdown("### 📊 Detection Summary")
     boxes = results[0].boxes
     if len(boxes) > 0:
-        # Create a list to show exactly what was found
+        # Create a clean list of findings
+        counts = {}
         for box in boxes:
-            class_id = int(box.cls[0])
-            label = model.names[class_id]
-            prob = float(box.conf[0])
-            st.success(f"✔️ Found: **{label.upper()}** (Confidence: {prob:.2f})")
+            label = model.names[int(box.cls[0])]
+            counts[label] = counts.get(label, 0) + 1
+        
+        # Display as metric cards
+        m_col1, m_col2, m_col3 = st.columns(3)
+        cols = [m_col1, m_col2, m_col3]
+        for i, (name, count) in enumerate(counts.items()):
+            cols[i % 3].metric(label=name.upper(), value=count)
     else:
-        st.warning("No objects (cavity, pipe, or brick) detected with current settings.")
+        st.warning("No targets found. Try lowering the 'Sensitivity' slider in the sidebar.")
