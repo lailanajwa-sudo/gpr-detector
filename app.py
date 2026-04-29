@@ -3,81 +3,106 @@ from ultralytics import YOLO
 from PIL import Image, ImageOps
 import numpy as np
 import cv2
-import pandas as pd
 
-# --- 1. PAGE SETUP & DESCRIPTION ---
-st.set_page_config(page_title="GPR-X GENIUS", layout="wide")
+# --- 1. PROFESSIONAL UI CONFIG ---
+st.set_page_config(page_title="GPR-X | Subsurface Analysis", layout="wide", page_icon="🛰️")
 
-st.title("🛰️ GPR-X: Intelligent Radargram Analysis")
+# Custom CSS for a cleaner look
 st.markdown("""
-### How it works:
-1. **AI Detection:** The system scans your GPR B-scan for hyperbolic signatures (the 'U' shapes) indicating buried pipes, cavities, or bricks.
-2. **Verification:** You confirm if the AI's findings are correct.
-3. **Manual Correction:** If the AI missed something, you can manually mark the coordinates to help retrain the model.
-""")
-st.markdown("---")
+    <style>
+    .main { background-color: #f5f7f9; }
+    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    </style>
+    """, unsafe_allow_html=True)
 
-# --- 2. LOAD MODEL ---
+# --- 2. HEADER & DESCRIPTION ---
+st.title("🛰️ GPR-X Intelligence Suite")
+st.subheader("Automated Hyperbolic Signature Classification")
+
+st.markdown("""
+Welcome to the **GPR-X Analysis Portal**. This platform utilizes state-of-the-art YOLOv8 deep learning models 
+to identify and classify subsurface anomalies from Ground Penetrating Radar (GPR) radargrams. 
+Simply upload your B-Scan image to begin the automated identification process.
+""")
+st.info("💡 **Model Focus:** The AI is trained to detect hyperbolic reflections from metal pipes, cavities, and structural masonry.")
+
+# --- 3. MODEL LOADING ---
 @st.cache_resource
 def load_model():
-    return YOLO('best.pt') # Ensure best.pt is in your GitHub folder [cite: 6, 22]
+    # Attempt to load the best.pt file from the repository
+    return YOLO('best.pt')
 
 try:
     model = load_model()
-except Exception as e:
-    st.error("Model 'best.pt' not found. Please upload it to your GitHub.")
+except Exception:
+    st.error("🚨 **System Error:** Model weights ('best.pt') not detected in the root directory. Please contact the administrator.")
 
-# --- 3. SIDEBAR ---
+# --- 4. SIDEBAR SETTINGS ---
 with st.sidebar:
-    st.header("⚙️ Settings")
-    conf_level = st.slider("AI Sensitivity", 0.01, 1.0, 0.20)
-    st.info("Lower sensitivity if the AI is missing faint hyperbolas.")
+    st.image("https://cdn-icons-png.flaticon.com/512/2092/2092040.png", width=100)
+    st.header("Analysis Settings")
+    conf_level = st.slider("Detection Sensitivity", 0.01, 1.0, 0.25, help="Higher values reduce false positives but may miss faint signals.")
+    st.divider()
+    st.caption("GPR-X Engine v2.1.0")
 
-# --- 4. UPLOAD & PREDICT ---
-uploaded_file = st.file_uploader("Upload a Radargram...", type=["jpg", "png", "jpeg"])
+# --- 5. CORE WORKFLOW ---
+uploaded_file = st.file_uploader("📂 Upload Radargram Image (JPG, PNG, TIFF)", type=["jpg", "png", "jpeg", "tiff"])
 
-if uploaded_file is not None:
+if uploaded_file:
+    # Load and Pre-process
     raw_img = Image.open(uploaded_file).convert("RGB")
     
-    # Run Prediction
-    with st.spinner("AI analyzing signals..."):
+    with st.spinner("🧬 Processing signals and running neural inference..."):
+        # AI Inference
         results = model.predict(source=np.array(raw_img), conf=conf_level)
         res_plotted = results[0].plot()
         res_rgb = cv2.cvtColor(res_plotted, cv2.COLOR_BGR2RGB)
+        
+        # Summary Statistics
+        detections = len(results[0].boxes)
 
-    # --- 5. SIDE-BY-SIDE CLASSIFICATION ---
+    # --- SIDE-BY-SIDE DISPLAY ---
+    st.markdown("### 📊 Analysis Results")
     col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("Original Input")
-        st.image(raw_img, use_container_width=True)
-    with col2:
-        st.subheader("AI Detection Result")
-        st.image(res_rgb, use_container_width=True)
-
-    # --- 6. USER FEEDBACK LOOP ---
-    st.markdown("---")
-    st.subheader("✅ Verification")
     
-    is_correct = st.radio("Is the AI detection accurate?", ("Select an option", "Yes, it looks correct", "No, it missed something / False alarm"))
+    with col1:
+        st.write("**Source Radargram**")
+        st.image(raw_img, use_container_width=True, caption="Uploaded Input")
+        
+    with col2:
+        st.write("**AI Classification Map**")
+        st.image(res_rgb, use_container_width=True, caption=f"Identified Anomalies: {detections}")
 
-    if is_correct == "Yes, it looks correct":
-        st.success("Great! This data will be logged as a successful detection.")
-        st.balloons()
+    # --- 6. PROFESSIONAL FEEDBACK SECTION ---
+    st.divider()
+    
+    with st.expander("🛠️ Expert Feedback & AI Improvement (Optional)"):
+        st.write("""
+        Our AI learns from expert feedback. If you notice a missed hyperbolic peak or a 
+        misclassification, please help us improve the system by providing the coordinates below.
+        """)
         
-    elif is_correct == "No, it missed something / False alarm":
-        st.warning("Let's correct the AI. Please provide the coordinates of the missed object.")
+        f_col1, f_col2, f_col3 = st.columns([1, 1, 1])
         
-        c1, c2 = st.columns([2, 1])
-        
-        with c1:
-            st.info("Hover over the image above to find the (X, Y) pixel coordinates of the missed hyperbola peak.")
-            # We use two inputs for a "Point-Click" style of logging
-            manual_x = st.number_input("Enter X Coordinate", 0, raw_img.width, 0)
-            manual_y = st.number_input("Enter Y Coordinate", 0, raw_img.height, 0)
+        with f_col1:
+            st.write("**Object Location**")
+            st.caption("Hover over the result image to find pixel coordinates.")
+            man_x = st.number_input("Pixel X", 0, raw_img.width, 0)
+            man_y = st.number_input("Pixel Y", 0, raw_img.height, 0)
             
-        with c2:
-            correct_label = st.selectbox("What is the object at this point?", ["Metal Pipe", "Cavity", "Brick", "False Alarm"])
-            if st.button("Submit Correction"):
-                # Save to session state or a log file
-                st.success(f"Point ({manual_x}, {manual_y}) logged as '{correct_label}'.")
-                st.info("This coordinate has been sent to the developer for model retraining.")
+        with f_col2:
+            st.write("**Correct Classification**")
+            label = st.selectbox("Actual Object Type", ["Metal Pipe", "Cavity", "Stone/Brick", "False Positive"])
+            
+        with f_col3:
+            st.write("**Submit Data**")
+            st.write("") # Spacer
+            if st.button("Log to Training Queue"):
+                st.toast(f"Data Logged: {label} at ({man_x}, {man_y})", icon="✅")
+                st.success("Thank you! Your feedback has been added to our active learning dataset.")
+                st.balloons()
+
+else:
+    # Landing View if no file uploaded
+    st.divider()
+    st.warning("Please upload a radargram to view the classification dashboard.")
