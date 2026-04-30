@@ -5,7 +5,7 @@ import numpy as np
 import cv2
 
 # --- 1. PAGE CONFIGURATION ---
-st.set_page_config(page_title="GPR-X Analysis Suite", layout="wide", page_icon="🛰️")
+st.set_page_config(page_title="GPR-X Detection", layout="wide", page_icon="🛰️")
 
 # Custom UI Styling
 st.markdown("""
@@ -16,7 +16,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 2. HEADER ---
-st.title("🛰️ GPR-X Intelligence Portal")
+st.title("🛰️ GPR-X Detection")
 st.write("Automated Subsurface Anomaly Detection & Classification System")
 
 # --- 3. MODEL LOADING ---
