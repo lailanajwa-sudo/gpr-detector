@@ -4,69 +4,63 @@ from PIL import Image
 import numpy as np
 import cv2
 
-# --- 1. PAGE CONFIGURATION ---
-st.set_page_config(page_title="GPR-X Detection", layout="wide", page_icon="🛰️")
+# --- 1. PAGE SETUP ---
+st.set_page_config(page_title="GPR-X Intelligence Portal", layout="wide")
 
-# Custom UI Styling
-st.markdown("""
-    <style>
-    .main { background-color: #f8f9fa; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    </style>
-    """, unsafe_allow_html=True)
+st.title("🛰️ GPR-X Analysis Suite")
+st.write("Automated Subsurface Anomaly Detection & Classification")
 
-# --- 2. HEADER ---
-st.title("🛰️ GPR-X Detection")
-st.write("Automated Subsurface Anomaly Detection & Classification System")
-
-# --- 3. MODEL LOADING ---
+# --- 2. LOAD MODEL ---
 @st.cache_resource
 def load_model():
-    # Ensure 'best.pt' is in your main GitHub repository folder
     return YOLO('best.pt')
 
 try:
     model = load_model()
 except Exception as e:
-    st.error("🚨 System Error: Model weights ('best.pt') not detected. Please upload the file to your GitHub.")
+    st.error("Model 'best.pt' not found. Please upload it to your GitHub repository.")
 
-# --- 4. UPLOAD WORKFLOW ---
+# --- 3. UPLOAD WORKFLOW ---
 st.divider()
-uploaded_file = st.file_uploader("📂 Upload Radargram B-Scan (JPG, PNG, JPEG)", type=["jpg", "png", "jpeg"])
+uploaded_file = st.file_uploader("Upload Radargram B-Scan", type=["jpg", "png", "jpeg"])
 
 if uploaded_file:
-    # Process Image
     img = Image.open(uploaded_file).convert("RGB")
     img_array = np.array(img)
 
-    with st.spinner("AI analyzing subsurface signatures..."):
-        # Run YOLOv8 Inference
+    with st.spinner("AI analyzing radargram..."):
+        # Run AI Inference
         results = model.predict(source=img_array, conf=0.25)
         res_plotted = results[0].plot()
         res_rgb = cv2.cvtColor(res_plotted, cv2.COLOR_BGR2RGB)
         
-        # --- THIS PART CALCULATES THE COUNT ---
+        # Count number of boxes detected
         num_detections = len(results[0].boxes)
 
-    # --- 5. SIDE-BY-SIDE RESULTS ---
+    # --- 4. DISPLAY RESULTS ---
     st.markdown("### 📊 Classification Results")
     
+    # Simple Side-by-Side
     col1, col2 = st.columns(2)
-    
     with col1:
-        st.info("🖼️ **Original Input**")
+        st.write("**Original Data**")
         st.image(img, use_container_width=True)
-        
     with col2:
-        st.success(f"🤖 **AI Classification Result**")
+        st.write("**AI Predictions**")
         st.image(res_rgb, use_container_width=True)
-        
-    # --- DISPLAY THE RESULT COUNT ---
+
+    # --- 5. NUMERICAL RESULTS (Replaces White Box) ---
     st.divider()
-    st.metric(label="Total Anomalies Identified", value=num_detections)
-    st.write(f"The AI model found **{num_detections}** hyperbolic signatures in this radargram.")
-    st.caption("Note: Detections represent potential buried pipes, cavities, or masonry.")
+    
+    # We use a clean columns layout instead of custom CSS cards to avoid the "white box" issue
+    res_col1, res_col2 = st.columns(2)
+    with res_col1:
+        st.subheader("Summary")
+        st.write(f"✅ **Total Anomalies Identified:** {num_detections}")
+        st.write(f"The model successfully classified **{num_detections}** targets in this scan.")
+    
+    with res_col2:
+        st.info("💡 **Note:** These detections represent hyperbolic signatures typically associated with buried utilities or cavities.")
 
 else:
-    # Default landing state
-    st.warning("Please upload a radargram file to begin the automated classification process.")
+    st.info("Please upload a radargram to begin classification.")
