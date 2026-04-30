@@ -45,7 +45,7 @@ if uploaded_file:
         res_plotted = results[0].plot()
         res_rgb = cv2.cvtColor(res_plotted, cv2.COLOR_BGR2RGB)
         
-        # Count detections
+        # --- THIS PART CALCULATES THE COUNT ---
         num_detections = len(results[0].boxes)
 
     # --- 5. SIDE-BY-SIDE RESULTS ---
@@ -61,12 +61,12 @@ if uploaded_file:
         st.success(f"🤖 **AI Classification Result**")
         st.image(res_rgb, use_container_width=True)
         
-    # Summary Metric
+    # --- DISPLAY THE RESULT COUNT ---
     st.divider()
     st.metric(label="Total Anomalies Identified", value=num_detections)
-    st.caption("Note: Detections are based on hyperbolic signature patterns in the GPR data.")
+    st.write(f"The AI model found **{num_detections}** hyperbolic signatures in this radargram.")
+    st.caption("Note: Detections represent potential buried pipes, cavities, or masonry.")
 
 else:
     # Default landing state
     st.warning("Please upload a radargram file to begin the automated classification process.")
-    st.info("This system is optimized for identifying metal pipes, cavities, and masonry structures.")
