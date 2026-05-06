@@ -5,9 +5,9 @@ import numpy as np
 import cv2
 
 # --- 1. PAGE SETUP ---
-st.set_page_config(page_title="GPR-X Detection", layout="wide")
+st.set_page_config(page_title="GPR-X Detector", layout="wide")
 
-st.title("🛰️ GPR-X Detection")
+st.title("🛰️ GPR-X Detector")
 st.write("Automated Subsurface Anomaly Detection & Classification")
 
 # --- 2. LOAD MODEL ---
